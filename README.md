@@ -2,14 +2,15 @@
 
 ## Roadmap
 
-- Se documenter sur l'algorithme
+- Documentation sur l'algorithme
 - Implémentation:
-  - de l'algorithme en lui-même
-  - d'un client, par exemple un site web simple qui permet à des utilisateurs de s'authentifier avec TOTP
-- Premier rendu: implémentation fonctionnelle marchant suffisamment bien
-- Se documenter sur les attaques
-- Tester des attaques sur l'implémentation
-  - éventuellement, corriger l'implémentation
+  [ ] Génération d'un TOTP
+  [ ] Échange sécurisé du TOTP
+  [ ] Création d'un service nécessitant un TOTP
+- Premier rendu: implémentation fonctionnelle répondant aux contraintes de confidentialité
+- Documentation sur les attaques
+- *Pentesting* de l'implémentation
+- Corriger les failles éventuelles mises à jour 
 
 
 ## Bibliographie
