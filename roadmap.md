@@ -4,16 +4,22 @@
 
 - Documentation sur l'algorithme
 - Implémentation:
-  [+] Génération d'un TOTP : 
-      [+] Génération d'une clé secrète pour la fonction de hashage 
-      [+] Utilisation de la clé pour obtenir le hash du timestamp par HMAC-SHA512
-      [+] Troncage du hash pour obtenir un TOTP court 
-  [-] Création d'un processus générant des TOTP à la demande, avec changement de clé à intervalles réguliers 
-  [-] Échange sécurisé du TOTP
-  [-] Création d'un service nécessitant un TOTP
+    [+] Génération d'un TOTP : 
+        [+] Génération d'une clé secrète pour la fonction de hashage 
+        [+] Utilisation de la clé pour obtenir le hash du timestamp par HMAC-SHA512
+        [+] Troncage du hash pour obtenir un TOTP court 
+        [+] Transformation du hash en un TOTP de 6 chiffres 
+    [-] Création d'un processus d'authentification : 
+        [-] Première connexion avec login et passwd  
+        [-] Génération d'une clé unique par utilisateur et transmission sous forme de QR code  
+        [-] Connexion suivante possible avec passwd ou TOTP généré du côté utilisateur 
+    [-] Création d'un service nécessitant un TOTP : 
+        [-] Création d'une interface web permettant la requête d'un TOTP 
+        [-] Interfaçage de l'interface web avec le générateur de TOTP 
+        [-] Déverouillage de contenu si TOTP soumis correct 
+    [-] Échange sécurisé du TOTP -> assuré par connexion chiffrée au service web  
 
 
-  
 - Premier rendu: implémentation fonctionnelle répondant aux contraintes de confidentialité
 - Documentation sur les attaques
 - *Pentesting* de l'implémentation
