@@ -10,9 +10,11 @@
         [+] Troncage du hash pour obtenir un TOTP court 
         [+] Transformation du hash en un TOTP de 6 chiffres 
     [-] Création d'un processus d'authentification : 
-        [-] Première connexion avec login et passwd  
-        [-] Génération d'une clé unique par utilisateur et transmission sous forme de QR code  
-        [-] Connexion suivante possible avec passwd ou TOTP généré du côté utilisateur 
+        [+] Première connexion avec login et passwd  
+        [+] Stockage sécurisé de login, passwd et clé unique pour chaque utilisateur 
+        [+] Transmission grâce à un scan de QR code  
+        [+] Connexion suivante possible avec passwd ou TOTP généré du côté utilisateur 
+        [+] Modélisation d'un service end-user générant les TOTP pour un utilisateur à partir de sa clé 
     [-] Création d'un service nécessitant un TOTP : 
         [-] Création d'une interface web permettant la requête d'un TOTP 
         [-] Interfaçage de l'interface web avec le générateur de TOTP 

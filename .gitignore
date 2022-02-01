@@ -1,1 +1,4 @@
 totp/**
+src/__pycache__
+src/qrcode/**
+src/logins.txt
