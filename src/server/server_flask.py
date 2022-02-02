@@ -1,11 +1,15 @@
 from flask import Flask, redirect, render_template, request, url_for, make_response, send_from_directory
-import sys, os
+import sys, os, time
 import qrcode
 from rm import rm 
 sys.path.append(os.path.abspath("../"))
 from auth import *
 
 session_ids = dict()
+
+login_tries = dict()
+timeout = dict()
+timeout_time = 300
 
 app = Flask(__name__)
 
@@ -22,8 +26,21 @@ def index():
         login = request.form['login']
         passwd = request.form['passwd']
         totp = request.form['totp']
-        _, errorcode, error = connection(login, passwd, totp)
+        if login not in timeout.keys() or time.time() > timeout[login]:
+            _, errorcode, error = connection(login, passwd, totp)
+            if login in timeout.keys(): 
+                timeout.pop(login)
+        else: 
+            # print("#"*50)
+            # print(f"User {login} is in timeout for {timeout[login] - time.time()}")
+            # print("#"*50)
+            return redirect("/")
         if errorcode == 0: 
+            try: 
+                timeout.pop(login)
+                login_tries.pop(login)
+            except:
+                pass
             session_id = get_session_id(login)
             session_ids[login] = session_id
             
@@ -35,6 +52,25 @@ def index():
             return res
         elif errorcode == 5: 
             login = ''
+        else:
+            if login not in login_tries.keys():
+                login_tries[login] = 3
+            
+            login_tries[login] -= 1
+            if login_tries[login] != 0: 
+                if login_tries[login] == 1:
+                    error += f" ({login_tries[login]} attempt left)"
+                elif login_tries[login] == 2: 
+                    error += f" ({login_tries[login]} attempts left)"
+                    
+            else: 
+                # print("#"*50)
+                # print(f"User {login} is in timeout until {time.time()+timeout_time}")
+                # print("#"*50)
+                timeout[login] = time.time()+timeout_time
+                return redirect("/")
+                
+            
         
     return render_template("index.html", error=error, errorcode=errorcode, login=login)
 
