@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block head %} 
+<title>Super Secure Service</title>
+<h1>Super Secure Service</h1>
+{% endblock %}
+
+
+{% block body %}
+
+<h3>Login : </h3>
+<form action="/new_user" method="POST" id="newuser">
+    <label for="login">New login :</label><br>
+    <input type="text" name="nlogin" id="nlogin" required value={{ login }}><br>
+    {% if errorcode == 1 or errorcode == 2%}  <p style="text-align:right;color:red; font-size:small; margin:auto"> {{ error }} </p>  
+    {% else %} <p style="text-align:right;color:white; font-size:small; margin:auto"> nothing </p> 
+    {% endif %}
+
+
+    <label for="npasswd">New password :</label><br>
+    <input type="password" name="npasswd" id="npasswd"><br>
+
+    <label for="cpasswd">Confirm password :</label><br>
+    <input type="password" name="cpasswd" id="cpasswd"><br>
+    {% if errorcode == 3 %}  <p style="text-align:right;color:red; font-size:small; margin:auto"> {{ error }} </p>  
+    {% else %} <p style="text-align:right;color:white; font-size:small; margin:auto"> nothing </p> 
+    {% endif %}
+
+    <input type="submit" value="Send">
+    
+</form>
+
+
+{% endblock %}

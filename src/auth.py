@@ -4,7 +4,10 @@ import re
 from Crypto.Cipher import AES
 import qrcode 
 from argon2 import PasswordHasher
-import totp
+import argon2
+from totp import get_totp
+from hmac import digest 
+
 
 master_hash = "$argon2id$v=19$m=65536,t=3,p=4$8CJrekUuCG7jD62OFJC/Wg$x0LFj8AUAEWlzhNSCk7oS7hLJpjtnbeQBjvPv3yM2T4"
 
@@ -18,75 +21,60 @@ def generate_key():
 
 
 def check_login(login):
-    output = True
-    
+       
     if login in logins.keys():
-        print("[!] Login already used")
-        output = False
+        return False, 1, "Login already used"
         
     p =  re.compile(r'.*([\W]+).*')
     if p.match(login) != None:
         if p.match(login).group()[1] == "'": 
-            print(f'[!] Login can\'t contain \"{p.match(login).group(1)}\"')
+            error = f'Login can\'t contain \"{p.match(login).group(1)}\"'
         else:
-            print(f'[!] Login can\'t contain \'{p.match(login).group(1)}\'')
-        output = False
-    return output
+            error = f'Login can\'t contain \'{p.match(login).group(1)}\''
+        return False, 2, error
+    return True, 0, ''
 
 
 
-def first_connection():
-    try:
-        login = input("Enter login : ")
-        while not check_login(login) :
-            login = input("Enter login : ")
-            
-            
-        passwd = getpass.getpass("Enter password : ")
-        confirm_passwd = getpass.getpass("Confirm password : ")
-        while passwd != confirm_passwd:
-            print("[!] Entries differ")
-            passwd = getpass.getpass("Enter password : ")
-            confirm_passwd = getpass.getpass("Confirm password : ")
-            
-        ph = PasswordHasher()
-        greetings(login)
-        hash = ph.hash(passwd)
-        logins[login] = (hash, generate_key()) 
-        # print(f"{login}'s key : {logins[login][1]}")
-        img = qrcode.make(logins[login][1])
-        img.save(f"qrcode/{login}.png")
+def first_connection(login, passwd, confirm_passwd):
+
+    if not check_login(login)[0]:
+        return '', check_login(login)[1], check_login(login)[2]
+    
+    if passwd != confirm_passwd: 
+        return '', 3, 'Entries differ'
         
-    except KeyboardInterrupt: 
-        print("\n[!] Exiting creation of new user")
-        return None
-    else: 
-        print("[+] New account created")
-        return login
+    ph = PasswordHasher()
+    hash = ph.hash(passwd)
+    logins[login] = (hash, generate_key()) 
+
+    img = qrcode.make(logins[login][1])
+    h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
+    img.save(f"static/qrcode/{login}:{h}.png")
+
+    return login, 0, ''    
     
     
     
 
-def connection(): 
-    try:
-        login = input("Enter login : ")
-        while login not in logins.keys():
-            print("[!] Unknown login")
-            login = input("Enter login : ")
+def connection(login, passwd, totp): 
+
+    if login not in logins.keys():
+        return '', 5, 'Non-existent login'            
             
-            
-        passwd = getpass.getpass("Enter password or TOTP : ")
+    if len(passwd) != 0: 
         ph = PasswordHasher()
-        while passwd != totp.get_totp(logins[login][1]) and passwd != totp.get_totp(logins[login][1], -1) and not ph.verify(logins[login][0], passwd):
-            print("[!] Incorrect password")
-            passwd = getpass.getpass("Enter password : ")
-        
-    except KeyboardInterrupt: 
-        print("\n[!] Exiting connection")
-        return None
+        try: 
+            if not ph.verify(logins[login][0], passwd):
+                return '', 6, 'Invalid password'
+        except argon2.exceptions.VerifyMismatchError: 
+            return '', 6, 'Invalid password'
     else: 
-        print("[+] New account created")
-        return login
+        if totp != get_totp(logins[login][1]) and totp != get_totp(logins[login][1], -1): 
+            return '', 7, 'Invalid TOTP'
+        
+    return login, 0, 'Glad to see you back !'
+    
     
     
 def greetings(name):
@@ -104,44 +92,48 @@ def greetings(name):
 def start_up():
     global master_passwd
     
-    master_passwd = getpass.getpass("Enter master password : ")
+    master_passwd = getpass.getpass("[ + ] Enter master password : ")
     counter = 0
     
     ph = PasswordHasher()
     while not ph.verify(master_hash, master_passwd) and counter != 2: 
         if counter == 1: 
-            print(f"[!] Wrong password, try again ({2-counter} try left)")
+            print(f"[ ! ] Wrong password, try again ({2-counter} try left)")
         else : 
-            print(f"[!] Wrong password, try again ({2-counter} tries left)")
+            print(f"[ ! ] Wrong password, try again ({2-counter} tries left)")
         master_passwd = getpass.getpass("Enter master password : ")
         counter += 1
 
     if counter == 2: 
-        print("[!] Master authentification failed")
+        print("[ ! ] Master authentification failed")
         exit()
 
-    print("[+] Master password accepted")
+    print("[ + ] Master password accepted")
     
     if exists('logins.txt'):
-        print("[+] Decrypting login file")
+        print("[   ] Decrypting login file", end='')
         with open("logins.txt", "r") as f: 
             lines = f.readlines()
         aes = AES.new((master_passwd+master_hash)[0:16], AES.MODE_CBC, (master_hash+master_passwd)[-16:])    
         for line in lines: 
             login, user_hash, c_user_key = line.split(":")
             logins[login] = (user_hash, aes.decrypt(bytes.fromhex(c_user_key)).decode('utf-8'))
+        print("\r[ + ] Login file decrypted   ")
+        
             
         
     
         
 def shutdown(): 
-    print("[+] Encrypting login file")
+    print("[ + ] Server shut down ")
+    print("[   ] Encrypting login file", end='')
     aes = AES.new((master_passwd+master_hash)[0:16], AES.MODE_CBC, (master_hash+master_passwd)[-16:])
     with open("logins.txt", "w") as f: 
         for key in logins.keys(): 
             c_user_key = aes.encrypt(logins[key][1]) 
             f.write(f"{key}:{logins[key][0]}:{c_user_key.hex()}\n")            
-    print("[+] Done")
+    print("\r[ + ] Login file encrypted   ")
+    print("[ + ] Shutting down ")
     exit()
         
     

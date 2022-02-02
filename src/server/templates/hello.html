@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block head %} 
+<title>Super Secure Service</title>
+<h1>Super Secure Service</h1>
+{% endblock %}
+
+
+{% block body %}
+<center>
+    <h3>Hello {{ user }} !</h3><br>
+    <p>Key : {{ key }}</p><br>
+    <img src={{ url_for('display_image', filename_uhash=image, _external=True) }}><br>
+    <a href="/"> Disconnect</a>
+</center>
+{% endblock %}
