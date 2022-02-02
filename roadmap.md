@@ -16,9 +16,10 @@
         [+] Connexion suivante possible avec passwd ou TOTP généré du côté utilisateur 
         [+] Modélisation d'un service end-user générant les TOTP pour un utilisateur à partir de sa clé 
     [+] Création d'un service nécessitant un TOTP : 
-        [+] Création d'une interface web permettant la requête d'un TOTP 
+        [+] Création d'une interface web 
         [+] Interfaçage de l'interface web avec le générateur de TOTP 
         [+] Déverouillage de contenu si TOTP soumis correct 
+        [+] Restriction d'accès aux fichiers pour client non-authentifié par utilisation de cookie de connexion
     [+] Échange sécurisé du TOTP -> assuré par connexion chiffrée au service web  
 
 
@@ -26,3 +27,5 @@
 - Documentation sur les attaques
 - *Pentesting* de l'implémentation
 - Corriger les failles éventuelles mises à jour 
+
+- Pentesting : 

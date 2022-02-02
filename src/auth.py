@@ -1,12 +1,12 @@
-import getpass, os, hashlib
+import getpass, os, time
 from os.path import exists 
 import re
 from Crypto.Cipher import AES
-import qrcode 
 from argon2 import PasswordHasher
 import argon2
 from totp import get_totp
 from hmac import digest 
+from rm import rm
 
 
 master_hash = "$argon2id$v=19$m=65536,t=3,p=4$8CJrekUuCG7jD62OFJC/Wg$x0LFj8AUAEWlzhNSCk7oS7hLJpjtnbeQBjvPv3yM2T4"
@@ -16,8 +16,15 @@ logins = dict()
 master_passwd = ""
 
 def generate_key(): 
-    return os.urandom(24).hex()
+    return os.urandom(32).hex()
 
+
+def get_session_id(user, now=0): 
+    session_id = digest(bytes.fromhex(logins[user][1]), (int(time.time()/400)+now).to_bytes(8, 'big'), 'sha512')
+    return session_id.hex()[:48]
+
+def verify_session_id(user, sid):
+    return sid == get_session_id(user) or sid == get_session_id(user, -1)
 
 
 def check_login(login):
@@ -48,9 +55,9 @@ def first_connection(login, passwd, confirm_passwd):
     hash = ph.hash(passwd)
     logins[login] = (hash, generate_key()) 
 
-    img = qrcode.make(logins[login][1])
-    h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
-    img.save(f"static/qrcode/{login}:{h}.png")
+    # img = qrcode.make(logins[login][1])
+    # h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
+    # img.save(f"static/qrcode/{login}:{h}.png")
 
     return login, 0, ''    
     
@@ -96,13 +103,18 @@ def start_up():
     counter = 0
     
     ph = PasswordHasher()
-    while not ph.verify(master_hash, master_passwd) and counter != 2: 
-        if counter == 1: 
-            print(f"[ ! ] Wrong password, try again ({2-counter} try left)")
-        else : 
-            print(f"[ ! ] Wrong password, try again ({2-counter} tries left)")
-        master_passwd = getpass.getpass("Enter master password : ")
-        counter += 1
+    authenticated = False
+    while not authenticated and counter != 2: 
+        try: 
+            authenticated = ph.verify(master_hash, master_passwd)
+        except:
+            authenticated = False
+            if counter == 1: 
+                print(f"[ ! ] Wrong password, try again ({2-counter} try left)")
+            else : 
+                print(f"[ ! ] Wrong password, try again ({2-counter} tries left)")
+            master_passwd = getpass.getpass("[ + ] Enter master password : ")
+            counter += 1
 
     if counter == 2: 
         print("[ ! ] Master authentification failed")
@@ -133,6 +145,7 @@ def shutdown():
             c_user_key = aes.encrypt(logins[key][1]) 
             f.write(f"{key}:{logins[key][0]}:{c_user_key.hex()}\n")            
     print("\r[ + ] Login file encrypted   ")
+    rm('static/qrcode/*')
     print("[ + ] Shutting down ")
     exit()
         

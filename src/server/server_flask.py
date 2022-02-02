@@ -1,15 +1,20 @@
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, redirect, render_template, request, url_for, make_response, send_from_directory
 import sys, os
+import qrcode
+from rm import rm 
 sys.path.append(os.path.abspath("../"))
 from auth import *
-# from hashlib import blake2b
-from hmac import digest
 
+session_ids = dict()
 
 app = Flask(__name__)
 
 @app.route("/", methods=['GET', 'POST'])
 def index():
+    # print('#'*50)
+    # print(f"Cookie at {request.full_path} : {request.cookies}")
+    # print('#'*50)
+    
     error = None
     errorcode = None
     login = ''
@@ -19,12 +24,15 @@ def index():
         totp = request.form['totp']
         _, errorcode, error = connection(login, passwd, totp)
         if errorcode == 0: 
-            # h = blake2b(login.encode("utf-8"), digest_size=20, key=logins[login][1].encode("utf-8")).hexdigest()
-            h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
-            # print('-'*50)
-            # print(f"In index : {h}")
-            # print('-'*50)
-            return redirect(f"/user/{login}:{h}")
+            session_id = get_session_id(login)
+            session_ids[login] = session_id
+            
+            img = qrcode.make(logins[login][1])
+            img.save(f"static/qrcode/{login}.png")
+
+            res = make_response(redirect(f"/user/{login}"))
+            res.set_cookie('session_id', session_id)
+            return res
         elif errorcode == 5: 
             login = ''
         
@@ -41,45 +49,65 @@ def new_user():
         confirm_passwd = request.form['cpasswd']
         _, errorcode, error = first_connection(login, passwd, confirm_passwd)
         if errorcode == 0: 
-            # h = blake2b(login.encode("utf-8"), digest_size=20, key=logins[login][1].encode("utf-8")).hexdigest()
-            h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
-            return redirect(f"/user/{login}:{h}")
+            session_id = get_session_id(login)
+            session_ids[login] = session_id
+            
+            img = qrcode.make(logins[login][1])
+            img.save(f"static/qrcode/{login}.png")
+            
+            res = make_response(redirect(f"/user/{login}"))
+            res.set_cookie('session_id', session_id)
+            return res
         elif errorcode == 1: 
             login=''
     
     return render_template('new_user.html', error=error, errorcode=errorcode, login=login)
 
-@app.route('/user/<user_uhash>', methods=['GET'])
-def hello(user_uhash):
-    # print('-'*50)
-    # print(f"In hello : {user_uhash.count(':')}")
-    if user_uhash.count(":") == 1:
-        [user, uhash] = user_uhash.split(':')
-        # print(f"user  : {user}")
-        # print(f"uhash : {uhash}")
-        # h = blake2b(user.encode("utf-8"), digest_size=20, key=logins[user][1].encode("utf-8")).hexdigest()
-        h = digest(logins[user][1].encode("utf-8"), user.encode("utf-8"), 'sha512').hex()[:32]
-        # print(f"{h}")
-        # print(f"{uhash == h}")
-        # print('-'*50)
-        if uhash == h: 
+@app.route('/user/<user>', methods=['GET', 'POST'])
+def hello(user):
+    # print('#'*50)
+    # print(f"Cookie at {request.full_path} : {request.cookies}")
+    # print('#'*50)
+    
+    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
+        if request.method == 'GET': 
             key = logins[user][1]
-            return render_template("hello.html", user=user, key=key, image=f"{user}:{h}")
-     
+            return render_template("hello.html", user=user, key=key)
+        else: 
+            rm(f"static/qrcode/{user}.png")
+            res = make_response(redirect(f"/"))
+            res.set_cookie('session_id', session_ids[user], max_age=0)
+            session_ids.pop(user)
+            return res
+    if request.method == 'POST': 
+        res = make_response(redirect(f"/"))
+        res.set_cookie('session_id', "", max_age=0)
+        return res
     return redirect("/jail")
 
-@app.route('/qrcode/<filename_uhash>')
-def display_image(filename_uhash):
-    if filename_uhash.count(":") == 1:
-        [user, uhash] = filename_uhash.split(':')
-        # h = blake2b(user.encode("utf-8"), digest_size=20, key=logins[user][1].encode("utf-8")).hexdigest()
-        h = digest(logins[user][1].encode("utf-8"), user.encode("utf-8"), 'sha512').hex()[:32]
-        # print('-'*50)
-        # print(f"In display : {h}")
-        # print('-'*50)
-        if uhash == h:
-            return redirect(url_for('static', filename='qrcode/' + filename_uhash + '.png'))
+
+@app.route('/qrcode/<user>')
+def display_image(user):
+    # print('#'*50)
+    # print(f"Cookie at {request.full_path} : {request.cookies}")
+    # print('#'*50)
+    
+    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
+        return redirect(url_for('static', filename='qrcode/' + user + '.png'))
+        
     return redirect("/jail")
+
+@app.route('/static/qrcode/<image>')
+def image(image):
+    # print('#'*50)
+    # print(f"Cookie at {request.full_path} : {request.cookies}")
+    # print('#'*50)
+    
+    user = image[:-4]
+    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
+        return send_from_directory("static/qrcode/", f"{image}")
+    else: 
+        return redirect("/jail")
     
 
 
@@ -92,5 +120,5 @@ def jail():
 
 if __name__ == "__main__":
     start_up()
-    app.run() # ssl_context='adhoc', 
+    app.run(ssl_context='adhoc') # ssl_context='adhoc', 
     shutdown()
