@@ -15,9 +15,6 @@ app = Flask(__name__)
 
 @app.route("/", methods=['GET', 'POST'])
 def index():
-    # print('#'*50)
-    # print(f"Cookie at {request.full_path} : {request.cookies}")
-    # print('#'*50)
     
     error = None
     errorcode = None
@@ -31,9 +28,6 @@ def index():
             if login in timeout.keys(): 
                 timeout.pop(login)
         else: 
-            # print("#"*50)
-            # print(f"User {login} is in timeout for {timeout[login] - time.time()}")
-            # print("#"*50)
             return redirect("/")
         if errorcode == 0: 
             try: 
@@ -64,9 +58,6 @@ def index():
                     error += f" ({login_tries[login]} attempts left)"
                     
             else: 
-                # print("#"*50)
-                # print(f"User {login} is in timeout until {time.time()+timeout_time}")
-                # print("#"*50)
                 timeout[login] = time.time()+timeout_time
                 return redirect("/")
                 
@@ -100,15 +91,11 @@ def new_user():
     return render_template('new_user.html', error=error, errorcode=errorcode, login=login)
 
 @app.route('/user/<user>', methods=['GET', 'POST'])
-def hello(user):
-    # print('#'*50)
-    # print(f"Cookie at {request.full_path} : {request.cookies}")
-    # print('#'*50)
-    
+def hello(user):    
     if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
         if request.method == 'GET': 
             key = logins[user][1]
-            return render_template("hello.html", user=user, key=key)
+            return render_template("hello.html", user=user, key=key, filename=f"{user}.png")
         else: 
             rm(f"static/qrcode/{user}.png")
             res = make_response(redirect(f"/"))
@@ -122,22 +109,8 @@ def hello(user):
     return redirect("/jail")
 
 
-@app.route('/qrcode/<user>')
-def display_image(user):
-    # print('#'*50)
-    # print(f"Cookie at {request.full_path} : {request.cookies}")
-    # print('#'*50)
-    
-    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
-        return redirect(url_for('static', filename='qrcode/' + user + '.png'))
-        
-    return redirect("/jail")
-
 @app.route('/static/qrcode/<image>')
 def image(image):
-    # print('#'*50)
-    # print(f"Cookie at {request.full_path} : {request.cookies}")
-    # print('#'*50)
     
     user = image[:-4]
     if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
@@ -156,5 +129,6 @@ def jail():
 
 if __name__ == "__main__":
     start_up()
-    app.run(ssl_context='adhoc') # ssl_context='adhoc', 
+    app.run(debug=True)
+    # app.run(ssl_context='adhoc')  
     shutdown()

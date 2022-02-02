@@ -10,7 +10,7 @@
 <center>
     <h3>Hello {{ user }} !</h3><br>
     <p>Key : {{ key }}</p><br>
-    <img src={{ url_for('display_image', user=user, _external=True) }}><br>
+    <img src={{ url_for('image', image=filename, _external=True) }}><br>
     <form action="/user/{{ user }}" method="post">
         <input type="submit" value="Disconnect">
     </form>

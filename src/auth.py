@@ -145,7 +145,7 @@ def shutdown():
             c_user_key = aes.encrypt(logins[key][1]) 
             f.write(f"{key}:{logins[key][0]}:{c_user_key.hex()}\n")            
     print("\r[ + ] Login file encrypted   ")
-    rm('static/qrcode/*')
+    os.system("rm -f static/qrcode/*")
     print("[ + ] Shutting down ")
     exit()
         
