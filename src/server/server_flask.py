@@ -10,6 +10,7 @@ session_ids = dict()
 login_tries = dict()
 timeout = dict()
 timeout_time = 300
+used_totp = dict()
 
 app = Flask(__name__)
 
@@ -24,7 +25,23 @@ def index():
         passwd = request.form['passwd']
         totp = request.form['totp']
         if login not in timeout.keys() or time.time() > timeout[login]:
-            _, errorcode, error = connection(login, passwd, totp)
+            
+            if len(passwd) != 0: 
+                _, errorcode, error = connection(login, passwd, '')
+            else: 
+                valid, errorcode, error = connection(login, '', totp)
+                if valid: 
+                    if login not in used_totp.keys(): 
+                        used_totp[login] = [totp]
+                    else: 
+                        if totp in used_totp[login]:
+                            errorcode = 8
+                            error = "Invalid TOTP (already used)"
+                        else: 
+                            used_totp[login].append(totp)
+                            used_totp[login] = used_totp[login][-3:]
+                    
+                    
             if login in timeout.keys(): 
                 timeout.pop(login)
         else: 
@@ -46,7 +63,7 @@ def index():
             return res
         elif errorcode == 5: 
             login = ''
-        else:
+        elif errorcode == 6 or errorcode == 7: 
             if login not in login_tries.keys():
                 login_tries[login] = 3
             
@@ -60,6 +77,7 @@ def index():
             else: 
                 timeout[login] = time.time()+timeout_time
                 return redirect("/")
+            
                 
             
         
@@ -129,7 +147,8 @@ def jail():
 
 if __name__ == "__main__":
     start_up()
+    app.run()
     # app.run(debug=True)
-    app.run(ssl_context='adhoc')  
+    # app.run(ssl_context='adhoc')  
     # app.run(host='172.16.85.1')  
     shutdown()
