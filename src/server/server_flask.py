@@ -38,7 +38,7 @@ def index():
             session_id = get_session_id(login)
             session_ids[login] = session_id
             
-            img = qrcode.make(logins[login][1])
+            img = get_qrcode(login)
             img.save(f"static/qrcode/{login}.png")
 
             res = make_response(redirect(f"/user/{login}"))
@@ -79,7 +79,7 @@ def new_user():
             session_id = get_session_id(login)
             session_ids[login] = session_id
             
-            img = qrcode.make(logins[login][1])
+            img = get_qrcode(login)
             img.save(f"static/qrcode/{login}.png")
             
             res = make_response(redirect(f"/user/{login}"))
@@ -94,7 +94,7 @@ def new_user():
 def hello(user):    
     if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
         if request.method == 'GET': 
-            key = logins[user][1]
+            key = decrypt_key(logins[user][1])
             return render_template("hello.html", user=user, key=key, filename=f"{user}.png")
         else: 
             rm(f"static/qrcode/{user}.png")
@@ -129,6 +129,7 @@ def jail():
 
 if __name__ == "__main__":
     start_up()
-    app.run(debug=True)
-    # app.run(ssl_context='adhoc')  
+    # app.run(debug=True)
+    app.run(ssl_context='adhoc')  
+    # app.run(host='172.16.85.1')  
     shutdown()

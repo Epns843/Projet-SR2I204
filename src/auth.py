@@ -6,7 +6,8 @@ from argon2 import PasswordHasher
 import argon2
 from totp import get_totp
 from hmac import digest 
-from rm import rm
+import qrcode
+import base64
 
 
 master_hash = "$argon2id$v=19$m=65536,t=3,p=4$8CJrekUuCG7jD62OFJC/Wg$x0LFj8AUAEWlzhNSCk7oS7hLJpjtnbeQBjvPv3yM2T4"
@@ -17,6 +18,27 @@ master_passwd = ""
 
 def generate_key(): 
     return os.urandom(32).hex()
+
+
+def encrypt_key(key):
+    global master_hash
+    global master_passwd
+    aes = AES.new((master_passwd + master_hash)[0:16], AES.MODE_CBC, (master_hash + master_passwd)[-16:])
+    return aes.encrypt(key).hex()
+
+def decrypt_key(key):
+    global master_hash
+    global master_passwd
+    aes = AES.new((master_passwd+master_hash)[0:16], AES.MODE_CBC, (master_hash+master_passwd)[-16:])
+    return aes.decrypt(bytes.fromhex(key)).decode('utf-8')
+
+
+def get_qrcode(user): 
+    base32key = base64.b32encode(bytes.fromhex(decrypt_key(logins[user][1]))).decode('utf-8')
+    qrcode_str = f"otpauth://totp/3S:{user}?secret={base32key}&issuer=3S&algorithm=SHA1&digits=6&period=30"
+    return qrcode.make(qrcode_str)
+
+
 
 
 def get_session_id(user, now=0): 
@@ -53,7 +75,7 @@ def first_connection(login, passwd, confirm_passwd):
         
     ph = PasswordHasher()
     hash = ph.hash(passwd)
-    logins[login] = (hash, generate_key()) 
+    logins[login] = (hash, encrypt_key(generate_key())) 
 
     # img = qrcode.make(logins[login][1])
     # h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
@@ -77,7 +99,7 @@ def connection(login, passwd, totp):
         except argon2.exceptions.VerifyMismatchError: 
             return '', 6, 'Invalid password'
     else: 
-        if totp != get_totp(logins[login][1]) and totp != get_totp(logins[login][1], -1): 
+        if totp != get_totp(decrypt_key(logins[login][1])) and totp != get_totp(decrypt_key(logins[login][1]), -1): 
             return '', 7, 'Invalid TOTP'
         
     return login, 0, 'Glad to see you back !'
@@ -123,28 +145,25 @@ def start_up():
     print("[ + ] Master password accepted")
     
     if exists('logins.txt'):
-        print("[   ] Decrypting login file", end='')
+        print("[   ] Loading login file", end='')
         with open("logins.txt", "r") as f: 
             lines = f.readlines()
-        aes = AES.new((master_passwd+master_hash)[0:16], AES.MODE_CBC, (master_hash+master_passwd)[-16:])    
         for line in lines: 
             login, user_hash, c_user_key = line.split(":")
-            logins[login] = (user_hash, aes.decrypt(bytes.fromhex(c_user_key)).decode('utf-8'))
-        print("\r[ + ] Login file decrypted   ")
+            logins[login] = (user_hash, c_user_key)
+        print("\r[ + ] Login file loaded   ")
         
             
         
     
         
 def shutdown(): 
-    print("[ + ] Server shut down ")
-    print("[   ] Encrypting login file", end='')
-    aes = AES.new((master_passwd+master_hash)[0:16], AES.MODE_CBC, (master_hash+master_passwd)[-16:])
+    print("\n[ + ] Server shut down ")
+    print("[   ] Writing login file", end='')
     with open("logins.txt", "w") as f: 
         for key in logins.keys(): 
-            c_user_key = aes.encrypt(logins[key][1]) 
-            f.write(f"{key}:{logins[key][0]}:{c_user_key.hex()}\n")            
-    print("\r[ + ] Login file encrypted   ")
+            f.write(f"{key}:{logins[key][0]}:{logins[key][1]}\n")            
+    print("\r[ + ] Login file written   ")
     os.system("rm -f static/qrcode/*")
     print("[ + ] Shutting down ")
     exit()
