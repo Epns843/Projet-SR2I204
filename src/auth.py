@@ -1,5 +1,5 @@
 import getpass, os, time
-from os.path import exists 
+import os.path  
 import re
 from Crypto.Cipher import AES
 from argon2 import PasswordHasher
@@ -9,10 +9,7 @@ from hmac import digest
 import qrcode
 import base64
 
-
 master_hash = "$argon2id$v=19$m=65536,t=3,p=4$8CJrekUuCG7jD62OFJC/Wg$x0LFj8AUAEWlzhNSCk7oS7hLJpjtnbeQBjvPv3yM2T4"
-
-logins = dict()
 
 master_passwd = ""
 
@@ -34,7 +31,7 @@ def decrypt_key(key):
 
 
 def get_qrcode(user): 
-    base32key = base64.b32encode(bytes.fromhex(decrypt_key(logins[user][1]))).decode('utf-8')
+    base32key = base64.b32encode(bytes.fromhex(decrypt_key(get_credentials(user)[1]))).decode('utf-8')
     qrcode_str = f"otpauth://totp/3S:{user}?secret={base32key}&issuer=3S&algorithm=SHA1&digits=6&period=30"
     return qrcode.make(qrcode_str)
 
@@ -42,16 +39,19 @@ def get_qrcode(user):
 
 
 def get_session_id(user, now=0): 
-    session_id = digest(bytes.fromhex(logins[user][1]), (int(time.time()/400)+now).to_bytes(8, 'big'), 'sha512')
+    session_id = digest(bytes.fromhex(get_credentials(user)[1]), (int(time.time()/420)+now).to_bytes(8, 'big'), 'sha512')
     return session_id.hex()[:48]
 
 def verify_session_id(user, sid):
     return sid == get_session_id(user) or sid == get_session_id(user, -1)
 
 
+
+
+
 def check_login(login):
        
-    if login in logins.keys():
+    if exists(login): 
         return False, 1, "Login already used"
         
     p =  re.compile(r'.*([\W]+).*')
@@ -70,16 +70,48 @@ def first_connection(login, passwd, confirm_passwd):
     if not check_login(login)[0]:
         return '', check_login(login)[1], check_login(login)[2]
     
+    l, u, p, d = 0, 0, 0, 0
+    if (len(passwd) >= 10):
+        for i in passwd:
+            if (i.islower()):
+                l+=1            
+    
+            if (i.isupper()):
+                u+=1            
+    
+            if (i.isdigit()):
+                d+=1            
+    
+            if(i=='@' or i=='$' or i=='_' or i=='?'or i=='!'):
+                p+=1
+    else: 
+        return '', 4, 'Password must be at least 10 characters long'
+    
+    if l + p + u + d != len(passwd):
+        return '', 4, 'Password contains invalid character'
+    
+    if l < 1: 
+        return '', 4, 'Password must contain at least one lowercase letter'
+        
+    if u < 1: 
+        return '', 4, 'Password must contain at least one uppercase letter'
+    
+    if d < 1: 
+        return '', 4, 'Password must contain at least one digit'
+    
+    if p < 1: 
+        return '', 4, 'Password must contain at least one special character'
+    
+    
     if passwd != confirm_passwd: 
         return '', 3, 'Entries differ'
         
     ph = PasswordHasher()
     hash = ph.hash(passwd)
-    logins[login] = (hash, encrypt_key(generate_key())) 
+    
+    with open("logins.txt", 'a') as f: 
+        f.write(f"{login}:{hash}:{encrypt_key(generate_key())}\n")
 
-    # img = qrcode.make(logins[login][1])
-    # h = digest(logins[login][1].encode("utf-8"), login.encode("utf-8"), 'sha512').hex()[:32]
-    # img.save(f"static/qrcode/{login}:{h}.png")
 
     return login, 0, ''    
     
@@ -88,34 +120,26 @@ def first_connection(login, passwd, confirm_passwd):
 
 def connection(login, passwd, totp): 
 
-    if login not in logins.keys():
-        return '', 5, 'Non-existent login'            
+    if not exists(login): 
+        return '', 5, 'Non-existent login'
+    
             
+    user_hash, c_user_key = get_credentials(login)    
+        
     if len(passwd) != 0: 
         ph = PasswordHasher()
         try: 
-            if not ph.verify(logins[login][0], passwd):
+            if not ph.verify(user_hash, passwd):
                 return '', 6, 'Invalid password'
         except argon2.exceptions.VerifyMismatchError: 
             return '', 6, 'Invalid password'
     else: 
-        if totp != get_totp(decrypt_key(logins[login][1])) and totp != get_totp(decrypt_key(logins[login][1]), -1): 
+        if totp != get_totp(decrypt_key(c_user_key)) and totp != get_totp(decrypt_key(c_user_key), -1): 
             return '', 7, 'Invalid TOTP'
         
     return login, 0, 'Glad to see you back !'
     
-    
-    
-def greetings(name):
-    if name != None: 
-        if name not in logins.keys():
-            print(f"Welcome {name} !")    
-        else: 
-            print(f"Hello {name}, good to see you back !")
-    else: 
-        print("[!] Greeting None user")
-        # print("[!] Exiting")
-        # shutdown()
+
         
         
 def start_up():
@@ -143,15 +167,6 @@ def start_up():
         exit()
 
     print("[ + ] Master password accepted")
-    
-    if exists('logins.txt'):
-        print("[   ] Loading login file", end='')
-        with open("logins.txt", "r") as f: 
-            lines = f.readlines()
-        for line in lines: 
-            login, user_hash, c_user_key = line.split(":")
-            logins[login] = (user_hash, c_user_key)
-        print("\r[ + ] Login file loaded   ")
         
             
         
@@ -159,31 +174,29 @@ def start_up():
         
 def shutdown(): 
     print("\n[ + ] Server shut down ")
-    print("[   ] Writing login file", end='')
-    with open("logins.txt", "w") as f: 
-        for key in logins.keys(): 
-            f.write(f"{key}:{logins[key][0]}:{logins[key][1]}\n")            
-    print("\r[ + ] Login file written   ")
     os.system("rm -f static/qrcode/*")
     print("[ + ] Shutting down ")
     exit()
         
     
-    
-    
-    
-if __name__ == "__main__":
-    start_up()
-    try: 
-        name = ""
-        while name != None :
-            name = first_connection()
-            if name != None: 
-                name = connection()
-                greetings(name)
-    except KeyboardInterrupt: 
-        shutdown()
-    else: 
-        shutdown()
-        exit(0)
-    
+
+def get_credentials(user):
+    with open("logins.txt", 'r') as f:
+        line = f.readline()
+        while line: 
+            login, user_hash, c_user_key = line.split(":")
+            if login == user: 
+                return user_hash, c_user_key
+            else: 
+                line = f.readline()
+                
+def exists(user): 
+    if os.path.exists('logins.txt'): 
+        with open('logins.txt', 'r') as f: 
+            line = f.readline()
+            while line:
+                login, _, __ = line.split(':')
+                if login == user:
+                    return True
+                line = f.readline()
+    return False

@@ -1,7 +1,9 @@
-from flask import Flask, redirect, render_template, request, url_for, make_response, send_from_directory
+from flask import Flask, redirect, render_template, request, make_response, send_from_directory
 import sys, os, time
-import qrcode
 from rm import rm 
+if os.path.abspath("./").count("/src/server") == 0: 
+    print("[ ! ] Not launching from /src/server")
+    exit()
 sys.path.append(os.path.abspath("../"))
 from auth import *
 
@@ -21,16 +23,22 @@ def index():
     errorcode = None
     login = ''
     if request.method == 'POST':
+        
         login = request.form['login']
         passwd = request.form['passwd']
         totp = request.form['totp']
+        
+        # Requête traitée si utilisateur pas en timeout 
         if login not in timeout.keys() or time.time() > timeout[login]:
             
             if len(passwd) != 0: 
                 _, errorcode, error = connection(login, passwd, '')
+                
             else: 
                 valid, errorcode, error = connection(login, '', totp)
                 if valid: 
+                    
+                    # Vérification si TOTP valide pour la période courante n'a pas déjà été utilisé 
                     if login not in used_totp.keys(): 
                         used_totp[login] = [totp]
                     else: 
@@ -40,12 +48,13 @@ def index():
                         else: 
                             used_totp[login].append(totp)
                             used_totp[login] = used_totp[login][-3:]
-                    
-                    
+
             if login in timeout.keys(): 
                 timeout.pop(login)
         else: 
             return redirect("/")
+        
+        
         if errorcode == 0: 
             try: 
                 timeout.pop(login)
@@ -61,8 +70,10 @@ def index():
             res = make_response(redirect(f"/user/{login}"))
             res.set_cookie('session_id', session_id)
             return res
+        
         elif errorcode == 5: 
             login = ''
+        
         elif errorcode == 6 or errorcode == 7: 
             if login not in login_tries.keys():
                 login_tries[login] = 3
@@ -78,9 +89,7 @@ def index():
                 timeout[login] = time.time()+timeout_time
                 return redirect("/")
             
-                
-            
-        
+
     return render_template("index.html", error=error, errorcode=errorcode, login=login)
 
 @app.route('/new_user', methods=['GET', 'POST'])
@@ -88,11 +97,15 @@ def new_user():
     error = None
     errorcode = None
     login = ''
+    
     if request.method == 'POST':
+        
         login = request.form['nlogin']
         passwd = request.form['npasswd']
         confirm_passwd = request.form['cpasswd']
+        
         _, errorcode, error = first_connection(login, passwd, confirm_passwd)
+        
         if errorcode == 0: 
             session_id = get_session_id(login)
             session_ids[login] = session_id
@@ -103,16 +116,20 @@ def new_user():
             res = make_response(redirect(f"/user/{login}"))
             res.set_cookie('session_id', session_id)
             return res
+    
         elif errorcode == 1: 
             login=''
     
     return render_template('new_user.html', error=error, errorcode=errorcode, login=login)
 
 @app.route('/user/<user>', methods=['GET', 'POST'])
-def hello(user):    
-    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
+def hello(user):
+    # Accès autorisé uniquement si user connecté (<=> user in session_ids.keys()) 
+    # et fournit le cookie donnée à sa connexion, 
+    # et si ce cookie est toujours valide au moment de la requête pour cette page (moins de 14 minutes depuis la connexion)
+    if user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id') and (request.cookies.get('session_id') == get_session_id(user) or request.cookies.get('session_id') == get_session_id(user, -1)):
         if request.method == 'GET': 
-            key = decrypt_key(logins[user][1])
+            key = decrypt_key(get_credentials(user)[1])
             return render_template("hello.html", user=user, key=key, filename=f"{user}.png")
         else: 
             rm(f"static/qrcode/{user}.png")
@@ -131,10 +148,22 @@ def hello(user):
 def image(image):
     
     user = image[:-4]
-    if(user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id')):
+    if not exists(user): 
+        return redirect("/jail")
+    
+    # Accès autorisé uniquement si user connecté (<=> user in session_ids.keys()) 
+    # et fournit le cookie donnée à sa connexion, 
+    # et si ce cookie est toujours valide au moment de la requête pour cette page (moins de 14 minutes depuis la connexion)
+    if user in session_ids.keys() and session_ids[user] == request.cookies.get('session_id') and (request.cookies.get('session_id') == get_session_id(user) or request.cookies.get('session_id') == get_session_id(user, -1)):
         return send_from_directory("static/qrcode/", f"{image}")
     else: 
         return redirect("/jail")
+    
+    
+
+@app.route("/favicon.ico") 
+def icon():
+    return send_from_directory("./", "favicon.ico")
     
 
 
@@ -146,9 +175,11 @@ def jail():
 
 
 if __name__ == "__main__":
+    if os.path.abspath("./").count("/src/server") == 0: 
+        print("[ ! ] Not launching from /src/server")
+        exit()
     start_up()
-    app.run()
-    # app.run(debug=True)
-    # app.run(ssl_context='adhoc')  
-    # app.run(host='172.16.85.1')  
+    # app.run()                         # Launches normal HTTP server 
+    # app.run(debug=True)               # Launches server in debug mode
+    app.run(ssl_context='adhoc')        # Launches HTTPS server
     shutdown()

@@ -2,10 +2,11 @@
 
 {% block head %} 
 <title>Super Secure Service</title>
-<h1>Super Secure Jail</h1>
+<h1>Super Secure Secure</h1>
 {% endblock %}
 
 
 {% block body %}
-
+<p>Session expired</p>
+<a href={{ url_for('index', _external=True) }}> Home Page</a>
 {% endblock %}

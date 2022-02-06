@@ -19,6 +19,9 @@
 
     <label for="npasswd">New password :</label><br>
     <input type="password" name="npasswd" id="npasswd"><br>
+    {% if errorcode == 4 %}  <p style="text-align:right;color:red; font-size:small; margin:auto"> {{ error }} </p>  
+    {% else %} <p style="text-align:right;color:white; font-size:small; margin:auto"> nothing </p> 
+    {% endif %}
 
     <label for="cpasswd">Confirm password :</label><br>
     <input type="password" name="cpasswd" id="cpasswd"><br>
